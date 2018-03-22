@@ -1,7 +1,7 @@
 Package: trimediation
 Type: Package
 Title: Controlled Direct Effect Calculation
-Version: 0.1.1
+Version: 0.1.2
 Author: Ashley Naimi
 Maintainer: Ashley Naimi <ashley.naimi@pitt.edu>
 Description: Social epidemiologists often seek to determine the mechanisms that 
@@ -16,7 +16,10 @@ Description: Social epidemiologists often seek to determine the mechanisms that
         3) The doubly robust g-estimation of a structural nested model, and 
         4) The doubly robust targeted minimum loss-based estimation. 
     This allows the user to explore ways in which a Standard approach for 
-    mediation analysis can yield misleading results. For more information,
+    mediation analysis can yield misleading results. 
+    Also implemented are non-parametric boostrapping methods for confidence 
+    interval evaluation.
+    For more information,
     please see:
     Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M. (2016).
     Mediation Analysis for Health Disparities Research. American Journal of
