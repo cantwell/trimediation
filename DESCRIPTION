@@ -1,7 +1,7 @@
 Package: trimediation
 Type: Package
-Title: Comparitive Counterfactual Disparity Measure Calculation
-Version: 0.1.0
+Title: Controlled Direct Effect Calculation
+Version: 0.1.1
 Author: Ashley Naimi
 Maintainer: Ashley Naimi <ashley.naimi@pitt.edu>
 Description: Social epidemiologists often seek to determine the mechanisms that 
@@ -21,6 +21,7 @@ Description: Social epidemiologists often seek to determine the mechanisms that
     Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M. (2016).
     Mediation Analysis for Health Disparities Research. American Journal of
     Epidemiology, 184(4), 315–324. https://doi.org/10.1093/aje/kwv329
+Imports: zeallot
 Depends: R (>= 3.2.3)
 License: GPL-3
 Encoding: UTF-8
