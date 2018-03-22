@@ -1,5 +1,5 @@
-## 1) revise last three functions using cde_ipw as template -- DONE
-## 2) push everything to GH
+## 1) revised last functions using cde_ipw as template -- DONE
+## 2) push everything to GH --DONE
 ## 3) implement bootstrap for CI
 ## 4) test functons in applied datasets
 
@@ -89,6 +89,7 @@ get_vars <- function(x, m, c_xy, c_my, y, mX, mM, mY) {
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
 #'   RD-interaction.
 #' @import zeallot
+#' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
 #'   Journal of Epidemiology, 184(4), 315–324.
@@ -160,6 +161,7 @@ cde_ipw<-function(x=NULL,
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
 #'   RD-interaction.
 #' @import zeallot
+#' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
 #'   Journal of Epidemiology, 184(4), 315–324.
@@ -217,6 +219,7 @@ cde_transf<-function(x=NULL,
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
 #'   RD-interaction.
 #' @import zeallot
+#' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
 #'   Journal of Epidemiology, 184(4), 315–324.
@@ -276,6 +279,7 @@ cde_gest<-function(x=NULL,
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
 #'   RD-interaction.
 #' @import zeallot
+#' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
 #'   Journal of Epidemiology, 184(4), 315–324.
@@ -352,6 +356,7 @@ cde_tmle<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @export
 #'
 #' @return : (data frame) a (2, 4) data frame with the RR-interaction and
 #'   RD-interaction for each of the models included in the analysis.
