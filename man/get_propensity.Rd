@@ -4,7 +4,7 @@
 \alias{get_propensity}
 \title{This is an an internal function called \code{get_propensity()}}
 \usage{
-get_propensity(data, mX, mM, famX, famM)
+get_propensity(tcde_data, tmX, tmM, tfamX, tfamM)
 }
 \arguments{
 \item{data}{: (datatype) Description of structure. What it represents.}
