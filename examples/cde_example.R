@@ -25,6 +25,8 @@
 library(trimediation)
 
 data(trimed_example)
+example_data <-trimed_example
+set.seed(2014)
 
 mX <- x~c_xy
 mM <- m~x+c_xy+c_my
@@ -40,4 +42,6 @@ compare_cde(x=trimed_example["x"],
             mY=mY,
             famX="binomial",
             famM="binomial",
-            famY="binomial")
+            famY="binomial",
+            boot=TRUE,
+            sims = 50)
