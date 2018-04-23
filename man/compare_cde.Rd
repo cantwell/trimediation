@@ -6,7 +6,8 @@
 \usage{
 compare_cde(x = NULL, m = NULL, c_xy = NULL, c_my = NULL, y = NULL,
   mX = NULL, mM = NULL, mY = NULL, famX = "gaussian",
-  famM = "gaussian", famY = "gaussian")
+  famM = "gaussian", famY = "gaussian", boot = TRUE, sims = 100,
+  ci = 0.95)
 }
 \arguments{
 \item{x}{: (datatype) Description of structure. What it represents.}
@@ -30,10 +31,21 @@ compare_cde(x = NULL, m = NULL, c_xy = NULL, c_my = NULL, y = NULL,
 \item{famM}{: (datatype) Description of structure. What it represents.}
 
 \item{famY}{: (datatype) Description of structure. What it represents.}
+
+\item{boot}{: (boolean) A boolean variable that indicates whether a
+non-parametric bootstrap will be used to calculate confidence intervals}
+
+\item{sims}{: (positive integer) If boot is TRUE, sims is the number of
+simulations used to generate the confidence intervals.}
+
+\item{ci}{: (float) A float between 0 and 1 representing the desired
+confidence interval to be used for the non-parametric bootstrap.}
 }
 \value{
-: (data frame) a (2, 4) data frame with the RR-interaction and
-  RD-interaction for each of the models included in the analysis.
+: (data frame) a data frame with all four mediation methods for
+  compaisionm, with RR-interaction and RD-interaction. If boot is TRUE, it
+  will also return the right and left bounds of the desired confidence
+  interval, ci.
 }
 \description{
 Controlled Direct Effect (CDE) model comparison

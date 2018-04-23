@@ -1,9 +1,7 @@
 ## 1) revised last functions using cde_ipw as template -- DONE
 ## 2) push everything to GH --DONE
-## 3) implement bootstrap for CI
-## 4) test functons in applied datasets
-
-# library(zeallot)
+## 3) implement bootstrap for CI --DONE
+## 4) test functons in applied datasets --IN PROCESS
 
 ## INTERNAL FUNCTIONS
 #  get_propensity
@@ -21,15 +19,32 @@
 #'
 #' @return a list of two propensities
 #'
-get_propensity <- function( data ,
-                            mX ,
-                            mM ,
-                            famX ,
-                            famM ) {
-  X<-glm(mX,data=data,family=famX)$fitted.values
-  M<-glm(mM,data=data,family=famM)$fitted.values
+get_propensity <- function( tcde_data ,
+                            tmX ,
+                            tmM ,
+                            tfamX ,
+                            tfamM ) {
+  X<-glm(tmX,data=tcde_data,family=tfamX)$fitted.values
+  M<-glm(tmM,data=tcde_data,family=tfamM)$fitted.values
   propensity <- list(X, M)
   return(propensity)
+}
+
+#  get_resample
+#' This is an an internal function called \code{get_resample()}
+#'
+#' This returns the rows of a data frame resampled with repetition for
+#' bootstrapping boot intervals.
+#'
+#' @keywords internal
+#'
+#' @param df : (dataframe) An arbitrary dataframe to be resampled.
+#'
+#' @return a list of two propensities
+#'
+get_resample <- function(df){
+  df <- df[sample(nrow(df), nrow(df), replace = TRUE),]
+  return(df)
 }
 
 #  get_vars
@@ -71,6 +86,78 @@ get_vars <- function(x, m, c_xy, c_my, y, mX, mM, mY) {
   return(vars)
 }
 
+#  get_boot
+#' This is an an internal function called \code{get_boot()}
+#'
+#' This returns a boot interval from a data set using manual bootstrap resampling.
+#'
+#' @keywords internal
+#'
+#' @param cde_ci : a dataframe containing the data necessary
+#' @param ci : (float) A number between zero and 1 denoting the boot
+#'   interval desired
+#'
+#' @return a number corresponding to the normal boot half-interval for the
+#'   resampled dataset
+#'
+get_boot <- function(cde_ci, ci) {
+
+
+  cde_mean <- apply(cde_ci, 2, mean)
+  cde_std  <- apply(cde_ci, 2, sd)
+  cde_len  <- nrow(cde_ci)
+  cde_err <- qnorm(ci)*cde_std/sqrt(cde_len)
+
+  return(cde_err)
+}
+
+#  get_output
+#' This is an an internal function called \code{get_output()}
+#'
+#' This formats a controlled direct effect estimate for risk difference and
+#' risk ratio along with the boot intervals from resampling (if requested).
+#'
+#' @keywords internal
+#'
+#' @param boot : (boolean) whether or not the boot interval should be calculated
+#' @param df : a dataframe containing the data necessary
+
+#' @param ci : (float) A number between zero and 1 denoting the boot
+#'   interval desired
+#'
+#' @return a cbind list of risk ratio and risk difference along with their boot intervals
+#'
+get_output <- function(cde_ci, ci) {
+
+  RR <- cde_ci[1,1]
+  RD <- cde_ci[1,2]
+  if (nrow(cde_ci > 1)) {
+
+    cde_err <- get_boot(cde_ci, ci)
+
+    RR_l_error <- RR - cde_err[1]
+    RR_r_error <- RR + cde_err[1]
+    RD_l_error <- RD - cde_err[2]
+    RD_r_error <- RD + cde_err[2]
+
+    cde_out <- cbind(RR, RR_l_error, RR_r_error, RD, RD_l_error, RD_r_error)
+    names(RR)<-"risk ratio"
+    names(RD) <- "risk difference"
+    names(RD_l_error)<-"RD lower ci"
+    names(RD_r_error) <- "RD upper ci"
+    names(RR_l_error)<-"RR lower ci"
+    names(RR_r_error) <- "RR upper ci"
+  }
+
+  else{
+    cde_out <- cbind(RR, RD)
+    names(RR)<-"risk ratio"
+    names(RD) <- "risk difference"
+  }
+
+  return(cde_out)
+}
+
 #' Controlled Direct Effect (CDE) of the inverse probability-
 #' weighted (IPW) marginal structural model.
 #'
@@ -85,9 +172,17 @@ get_vars <- function(x, m, c_xy, c_my, y, mX, mM, mY) {
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @param boot : (boolean) A boolean variable that indicates whether a
+#'   non-parametric bootstrap will be used to calculate confidence intervals
+#' @param sims : (positive integer) If boot is TRUE, sims is the number of
+#'   simulations used to generate the confidence intervals.
+#' @param ci   : (float) A float between 0 and 1 representing the desired
+#'   confidence interval to be used for the non-parametric bootstrap.
 #'
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
-#'   RD-interaction.
+#'   RD-interaction. If boot is TRUE, it will also return the right and left
+#'   bounds of the desired confidence interval, ci.
+#'
 #' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
@@ -107,42 +202,69 @@ cde_ipw<-function(x=NULL,
                   mY=NULL,
                   famX="gaussian",
                   famM="gaussian",
-                  famY="gaussian"){
+                  famY="gaussian",
+                  boot=TRUE,
+                  sims=100,
+                  ci=0.95){
 
-  c(data, exposure, mediator, outcome) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
+  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
                                                      mX=mX, mM=mM, mY=mY)
+  cde_ci <- data.frame()
 
-  # potential for superlearner...
-  c(X_propensity, M_propensity) %<-% get_propensity( data=data,
-                                                     mX=mX,
-                                                     mM=mM,
-                                                     famX=famX,
-                                                     famM=famM )
+  if (!boot) {
+    sims <- 1
+  }
 
-  den <- (X_propensity * exposure + (1 - X_propensity) * (1 - exposure)) *
-    (M_propensity * mediator + (1 - M_propensity) * (1 - mediator))
+  for (i in 1:sims){
 
-  num <- (mean(exposure) * exposure + (1 - mean(exposure)) * (1 - exposure)) *
-    (mean(mediator) * mediator + (1 - mean(mediator)) * (1 - mediator))
+    if (i == 1){
+      cde_data <- cde_data_o
+      exposure <- exposure_o
+      mediator <- mediator_o
+      outcome  <- outcome_o
+    } else {
+      cde_data <- get_resample(cde_data_o)
+      exposure <- cde_data$x
+      x        <- cde_data$x
+      mediator <- cde_data$m
+      m        <- cde_data$m
+      outcome  <- cde_data$y
+      y        <- cde_data$y
+      c_xy <- cde_data$c_xy
+      c_my <- cde_data$c_my
+    }
 
-  data$sw = num / den
+    # potential for superlearner...
+    c(X_propensity, M_propensity) %<-% get_propensity( cde_data,
+                                                       mX,
+                                                       mM,
+                                                       famX,
+                                                       famM )
 
-  RR <- exp(coef(glm(mY, data=data, family=poisson(link="log"),
-                     weights=sw))[as.character(mX[[2]])])
+    den <- (X_propensity * exposure + (1 - X_propensity) * (1 - exposure)) *
+      (M_propensity * mediator + (1 - M_propensity) * (1 - mediator))
 
-  RD <- coef(glm(mY, data=data, family=gaussian(link="identity"),
-                 weights=sw))[as.character(mX[[2]])]
+    num <- (mean(exposure) * exposure + (1 - mean(exposure)) * (1 - exposure)) *
+      (mean(mediator) * mediator + (1 - mean(mediator)) * (1 - mediator))
 
-  ipw <- cbind(RD,RR)
+    cde_data$sw = num / den
 
-  names(RR)<-"risk ratio"
-  names(RD) <- "risk difference"
-  row.names(ipw)<-"IPW"
+    RR <- exp(coef(glm(mY, data=cde_data, family=poisson(link="log"),
+                       weights=sw))[as.character(mX[[2]])])
 
-  return(ipw)
+    RD <- coef(glm(mY, data=cde_data, family=gaussian(link="identity"),
+                   weights=sw))[as.character(mX[[2]])]
+
+    cde_ci <- rbind(cde_ci, c(RR, RD))
+  }
+
+  output <- get_output(cde_ci, ci)
+  row.names(output) <- "IPW"
+
+  return(output)
 
 }
-
+###TODO test get_output and format to other functions.
 #' Controlled Direct Effect (CDE) of the structural
 #' transformation model.
 #'
@@ -157,9 +279,17 @@ cde_ipw<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @param boot : (boolean) A boolean variable that indicates whether a
+#'   non-parametric bootstrap will be used to calculate confidence intervals
+#' @param sims : (positive integer) If boot is TRUE, sims is the number of
+#'   simulations used to generate the confidence intervals.
+#' @param ci   : (float) A float between 0 and 1 representing the desired
+#'   confidence interval to be used for the non-parametric bootstrap.
 #'
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
-#'   RD-interaction.
+#'   RD-interaction. If boot is TRUE, it will also return the right and left
+#'   bounds of the desired confidence interval, ci.
+#'
 #' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
@@ -179,26 +309,57 @@ cde_transf<-function(x=NULL,
                      mY=NULL,
                      famX="gaussian",
                      famM="gaussian",
-                     famY="gaussian"){
+                     famY="gaussian",
+                     boot=TRUE,
+                     sims=100,
+                     ci=0.95){
 
-  c(data, exposure, mediator, outcome) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                     mX=mX, mM=mM, mY=mY)
+  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
+                                                                 mX=mX, mM=mM, mY=mY)
 
-  mod1 <- matrix(coef(lm(mY, data=data))[c("m","x:m")])
-  y_tilde <- outcome - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
-  RD <- coef(lm(y_tilde~exposure+c_xy,data=data))["exposure"]
+  cde_ci <- data.frame()
 
-  mod1 <- matrix(coef(glm(mY,data=data,family=poisson))[c("m","x:m")])
-  y_tilde <- outcome*exp(- matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1)
-  RR <- exp(coef(glm(y_tilde~exposure+c_xy,data=data,family=quasipoisson))["exposure"])
+  if (!boot) {
+    sims <- 1
+  }
 
-  transf<-cbind(RD,RR)
+  for (i in 1:sims){
 
-  names(RD)<-"Risk Difference"
-  names(RR)<-"Risk Ratio"
-  row.names(transf)<-"Struct Transf"
+    if (i == 1){
+      cde_data <- cde_data_o
+      exposure <- exposure_o
+      mediator <- mediator_o
+      outcome  <- outcome_o
+    } else {
+      cde_data <- get_resample(cde_data_o)
+      exposure <- cde_data$x
+      x        <- cde_data$x
+      mediator <- cde_data$m
+      m        <- cde_data$m
+      outcome  <- cde_data$y
+      y        <- cde_data$y
+      c_xy <- cde_data$c_xy
+      c_my <- cde_data$c_my
 
-  return(transf)
+    }
+
+
+    mod1 <- matrix(coef(lm(mY, data=cde_data))[c("m","x:m")])
+    y_term = matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
+    y_tilde <- outcome - y_term
+    RD <- coef(lm(y_tilde~exposure+c_xy,data=cde_data))["exposure"]
+
+    mod1 <- matrix(coef(glm(mY,data=cde_data,family=poisson))[c("m","x:m")])
+    y_term = matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
+    y_tilde <- outcome*exp(-y_term)
+    RR <- exp(coef(glm(y_tilde~exposure+c_xy,data=cde_data,family=quasipoisson))["exposure"])
+
+    cde_ci <- rbind(cde_ci, c(RR, RD))
+  }
+
+  output <- get_output(cde_ci, ci)
+  row.names(output) <- "TRANSF"
+  return(output)
 
 }
 
@@ -215,9 +376,17 @@ cde_transf<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @param boot : (boolean) A boolean variable that indicates whether a
+#'   non-parametric bootstrap will be used to calculate confidence intervals
+#' @param sims : (positive integer) If boot is TRUE, sims is the number of
+#'   simulations used to generate the confidence intervals.
+#' @param ci   : (float) A float between 0 and 1 representing the desired
+#'   confidence interval to be used for the non-parametric bootstrap.
 #'
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
-#'   RD-interaction.
+#'   RD-interaction. If boot is TRUE, it will also return the right and left
+#'   bounds of the desired confidence interval, ci.
+#'
 #' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
@@ -237,28 +406,60 @@ cde_gest<-function(x=NULL,
                    mY=NULL,
                    famX="gaussian",
                    famM="gaussian",
-                   famY="gaussian"){
+                   famY="gaussian",
+                   boot=TRUE,
+                   sims=100,
+                   ci=0.95){
 
-  c(data, exposure, mediator, outcome) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                     mX=mX, mM=mM, mY=mY)
+  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
+                                                                 mX=mX, mM=mM, mY=mY)
 
-  c(X_propensity, M_propensity) %<-% get_propensity(data=data, mX=mM, mM=mM, famX=famX, famM=famM )
+  cde_ci <- data.frame()
 
-  mod1<-matrix(coef(lm(y~x+I(m-M_propensity)+x:I(m-M_propensity)+c_my,data=data))[c("I(m - M_propensity)","x:I(m - M_propensity)")])
-  y_tilde<-outcome - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
-  RD<-coef(lm(y_tilde~I(x-X_propensity)+c_xy,data=data))["I(x - X_propensity)"]
+  if (!boot) {
+    sims <- 1
+  }
 
-  mod1<-matrix(coef(glm(y~x+I(m-M_propensity)+x:I(m-M_propensity)+c_xy+c_my,family=poisson,data=data))[c("I(m - M_propensity)","x:I(m - M_propensity)")])
-  y_tilde<-outcome*exp( - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1)
-  RR<-exp(coef(glm(y_tilde~I(x-X_propensity)+c_xy,family=quasipoisson,data=data))["I(x - X_propensity)"])
+  for (i in 1:sims){
 
-  gest<-cbind(RD,RR)
+    if (i == 1){
+      cde_data <- cde_data_o
+      exposure <- exposure_o
+      mediator <- mediator_o
+      outcome  <- outcome_o
+    } else {
+      cde_data <- get_resample(cde_data_o)
+      exposure <- cde_data$x
+      x        <- cde_data$x
+      mediator <- cde_data$m
+      m        <- cde_data$m
+      outcome  <- cde_data$y
+      y        <- cde_data$y
+      c_xy <- cde_data$c_xy
+      c_my <- cde_data$c_my
 
-  names(RD)<-"Risk Difference"
-  names(RR)<-"Risk Ratio"
-  row.names(gest)<-"G Estim"
+    }
 
-  return(gest)
+    c(X_propensity, M_propensity) %<-% get_propensity( cde_data,
+                                                       mX,
+                                                       mM,
+                                                       famX,
+                                                       famM )
+
+    mod1<-matrix(coef(lm(y~x+I(m-M_propensity)+x:I(m-M_propensity)+c_my,data=cde_data))[c("I(m - M_propensity)","x:I(m - M_propensity)")])
+    y_tilde<-outcome - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
+    RD<-coef(lm(y_tilde~I(x-X_propensity)+c_xy,data=cde_data))["I(x - X_propensity)"]
+
+    mod1<-matrix(coef(glm(y~x+I(m-M_propensity)+x:I(m-M_propensity)+c_xy+c_my,family=poisson,data=cde_data))[c("I(m - M_propensity)","x:I(m - M_propensity)")])
+    y_tilde<-outcome*exp( - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1)
+    RR<-exp(coef(glm(y_tilde~I(x-X_propensity)+c_xy,family=quasipoisson,data=cde_data))["I(x - X_propensity)"])
+
+    cde_ci <- rbind(cde_ci, c(RR, RD))
+  }
+
+  output <- get_output(cde_ci, ci)
+  row.names(output) <- "GEST"
+  return(output)
 }
 
 #' Controlled Direct Effect (CDE) of the Targeted Minimum Loss-based
@@ -275,9 +476,17 @@ cde_gest<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @param boot : (boolean) A boolean variable that indicates whether a
+#'   non-parametric bootstrap will be used to calculate confidence intervals
+#' @param sims : (positive integer) If boot is TRUE, sims is the number of
+#'   simulations used to generate the confidence intervals.
+#' @param ci   : (float) A float between 0 and 1 representing the desired
+#'   confidence interval to be used for the non-parametric bootstrap.
 #'
 #' @return : (vector) a length-2 list with the CDE with RR-interaction and
-#'   RD-interaction.
+#'   RD-interaction. If boot is TRUE, it will also return the right and left
+#'   bounds of the desired confidence interval, ci.
+#'
 #' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
@@ -297,50 +506,79 @@ cde_tmle<-function(x=NULL,
                    mY=NULL,
                    famX="gaussian",
                    famM="gaussian",
-                   famY="gaussian"){
+                   famY="gaussian",
+                   boot=TRUE,
+                   sims=100,
+                   ci=0.95){
 
-  c(data, exposure, mediator, outcome) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                     mX=mX, mM=mM, mY=mY)
+  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
+                                                                 mX=mX, mM=mM, mY=mY)
 
-  mY<-glm(y~c_xy+c_my,data=data,subset=x==1&m==0,family=binomial(link="logit"))
-  mM<-glm(m~c_my,data=data,subset=x==1,family=binomial(link="logit"))
-  mX<-glm(x~c_xy,data=data,family=binomial(link="logit"))
+  cde_ci <- data.frame()
 
-  newdata1<-data;newdata1$x<-1;newdata1$m<-0;
-  pY<-predict(mY,newdata=newdata1,type="response")
-  pM<-predict(mM,newdata=newdata1,type="response")
-  pX<-predict(mX,newdata=newdata1,type="response")
-  data$cc2 <- as.numeric(data$x==1&data$m==0)/((1-pM)*(pX))
-  q2_star<-glm(y~-1+cc2,data=data,offset=log(pY/(1-pY)),family=binomial(link="logit"))$fitted.values
-  mQ1<-glm(q2_star ~ c_xy,data=data,subset=x==1,family=quasibinomial(link="logit"))
-  q1<-predict(mQ1,newdata=newdata1,type="response")
-  data$cc1 <- as.numeric(data$x==1)/pX
-  mu10<-glm(q2_star ~ -1 + cc1, data=data,family=quasibinomial(link="logit"),offset=log(q1/(1-q1)))$fitted.values
+  if (!boot) {
+    sims <- 1
+  }
 
-  mY<-glm(y~c_xy+c_my,data=data,subset=x==0&m==0,family=binomial(link="logit"))
-  mM<-glm(m~c_my,data=data,subset=x==0,family=binomial(link="logit"))
+  for (i in 1:sims){
 
-  newdata1<-data;newdata1$x<-0;newdata1$m<-0;
-  pY<-predict(mY,newdata=newdata1,type="response")
-  pM<-predict(mM,newdata=newdata1,type="response")
-  pX<-predict(mX,newdata=newdata1,type="response")
-  data$cc2 <- as.numeric(data$x==0&data$m==0)/((1-pM)*(pX))
-  q2_star<-glm(y~-1+cc2,data=data,offset=log(pY/(1-pY)),family=binomial(link="logit"))$fitted.values
-  mQ1<-glm(q2_star ~ c_xy,data=data,subset=x==0,family=quasibinomial(link="logit"))
-  q1<-predict(mQ1,newdata=newdata1,type="response")
-  data$cc1 <- as.numeric(data$x==0)/pX
-  mu00<-glm(q2_star ~ -1 + cc1, data=data,family=quasibinomial(link="logit"),offset=log(q1/(1-q1)))$fitted.values
+    if (i == 1){
+      cde_data <- cde_data_o
+      exposure <- exposure_o
+      mediator <- mediator_o
+      outcome  <- outcome_o
+    } else {
+      cde_data <- get_resample(cde_data_o)
+      exposure <- cde_data$x
+      x        <- cde_data$x
+      mediator <- cde_data$m
+      m        <- cde_data$m
+      outcome  <- cde_data$y
+      y        <- cde_data$y
+      c_xy <- cde_data$c_xy
+      c_my <- cde_data$c_my
 
-  RD<-mean(mu10-mu00)
-  RR<-mean(mu10)/mean(mu00)
-  tml<-cbind(RD,RR)
+    }
 
-  names(RD)<-"Risk Difference"
-  names(RR)<-"Risk Ratio"
-  row.names(tml)<-"TMLE"
+    mY<-glm(y~c_xy+c_my,data=cde_data,subset=x==1&m==0,family=binomial(link="logit"))
+    mM<-glm(m~c_my,data=cde_data,subset=x==1,family=binomial(link="logit"))
+    mX<-glm(x~c_xy,data=cde_data,family=binomial(link="logit"))
 
-  return(tml)
+    newdata1<-cde_data;newdata1$x<-1;newdata1$m<-0;
+    pY<-predict(mY,newdata=newdata1,type="response")
+    pM<-predict(mM,newdata=newdata1,type="response")
+    pX<-predict(mX,newdata=newdata1,type="response")
+    cde_data$cc2 <- as.numeric(cde_data$x==1&cde_data$m==0)/((1-pM)*(pX))
+    q2_star<-glm(y~-1+cc2,data=cde_data,offset=log(pY/(1-pY)),family=binomial(link="logit"))$fitted.values
+    mQ1<-glm(q2_star ~ c_xy,data=cde_data,subset=x==1,family=quasibinomial(link="logit"))
+    q1<-predict(mQ1,newdata=newdata1,type="response")
+    cde_data$cc1 <- as.numeric(cde_data$x==1)/pX
+    mu10<-glm(q2_star ~ -1 + cc1, data=cde_data,family=quasibinomial(link="logit"),offset=log(q1/(1-q1)))$fitted.values
 
+    mY<-glm(y~c_xy+c_my,data=cde_data,subset=x==0&m==0,family=binomial(link="logit"))
+    mM<-glm(m~c_my,data=cde_data,subset=x==0,family=binomial(link="logit"))
+
+    newdata1<-cde_data;newdata1$x<-0;newdata1$m<-0;
+    pY<-predict(mY,newdata=newdata1,type="response")
+    pM<-predict(mM,newdata=newdata1,type="response")
+    pX<-predict(mX,newdata=newdata1,type="response")
+    cde_data$cc2 <- as.numeric(cde_data$x==0&cde_data$m==0)/((1-pM)*(pX))
+    q2_star<-glm(y~-1+cc2,data=cde_data,offset=log(pY/(1-pY)),family=binomial(link="logit"))$fitted.values
+    mQ1<-glm(q2_star ~ c_xy,data=cde_data,subset=x==0,family=quasibinomial(link="logit"))
+    q1<-predict(mQ1,newdata=newdata1,type="response")
+    cde_data$cc1 <- as.numeric(cde_data$x==0)/pX
+    mu00<-glm(q2_star ~ -1 + cc1, data=cde_data,family=quasibinomial(link="logit"),offset=log(q1/(1-q1)))$fitted.values
+
+    RD<-mean(mu10-mu00)
+    RR<-mean(mu10)/mean(mu00)
+
+    cde_ci <- rbind(cde_ci, c(RR, RD))
+  }
+
+  output <- get_output(cde_ci, ci)
+
+  row.names(output) <- "TMLE"
+  return(output)
 }
 
 #' Controlled Direct Effect (CDE) model comparison
@@ -356,10 +594,19 @@ cde_tmle<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+#' @param boot : (boolean) A boolean variable that indicates whether a
+#'   non-parametric bootstrap will be used to calculate confidence intervals
+#' @param sims : (positive integer) If boot is TRUE, sims is the number of
+#'   simulations used to generate the confidence intervals.
+#' @param ci   : (float) A float between 0 and 1 representing the desired
+#'   confidence interval to be used for the non-parametric bootstrap.
 #' @export
 #'
-#' @return : (data frame) a (2, 4) data frame with the RR-interaction and
-#'   RD-interaction for each of the models included in the analysis.
+#' @return : (data frame) a data frame with all four mediation methods for
+#'   compaisionm, with RR-interaction and RD-interaction. If boot is TRUE, it
+#'   will also return the right and left bounds of the desired confidence
+#'   interval, ci.
+#'
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
 #'   Journal of Epidemiology, 184(4), 315–324.
@@ -377,9 +624,12 @@ compare_cde<-function(x=NULL,
                       mY=NULL,
                       famX="gaussian",
                       famM="gaussian",
-                      famY="gaussian"){
+                      famY="gaussian",
+                      boot=TRUE,
+                      sims=100,
+                      ci=0.95){
 
-  args = list(x, m, c_xy, c_my, y, mX, mM, mY, famX, famM, famY)
+  args = list(x, m, c_xy, c_my, y, mX, mM, mY, famX, famM, famY, boot, sims, ci)
 
   estimators = list(cde_ipw, cde_transf, cde_gest, cde_tmle)
 
