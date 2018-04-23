@@ -1,7 +1,14 @@
 ## 1) revised last functions using cde_ipw as template -- DONE
 ## 2) push everything to GH --DONE
+<<<<<<< HEAD
 ## 3) implement bootstrap for CI --DONE
 ## 4) test functons in applied datasets --IN PROCESS
+=======
+## 3) implement bootstrap for CI
+## 4) test functons in applied datasets
+
+# library(zeallot)
+>>>>>>> 03355392d2f82c92ff9db070bef8d4a56a0727c0
 
 ## INTERNAL FUNCTIONS
 #  get_propensity
@@ -594,6 +601,7 @@ cde_tmle<-function(x=NULL,
 #' @param famX : (datatype) Description of structure. What it represents.
 #' @param famM : (datatype) Description of structure. What it represents.
 #' @param famY : (datatype) Description of structure. What it represents.
+<<<<<<< HEAD
 #' @param boot : (boolean) A boolean variable that indicates whether a
 #'   non-parametric bootstrap will be used to calculate confidence intervals
 #' @param sims : (positive integer) If boot is TRUE, sims is the number of
@@ -606,6 +614,9 @@ cde_tmle<-function(x=NULL,
 #'   compaisionm, with RR-interaction and RD-interaction. If boot is TRUE, it
 #'   will also return the right and left bounds of the desired confidence
 #'   interval, ci.
+=======
+#' @export
+>>>>>>> 03355392d2f82c92ff9db070bef8d4a56a0727c0
 #'
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
