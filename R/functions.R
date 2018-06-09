@@ -3,9 +3,6 @@
 ## 3) implement bootstrap for CI --DONE
 ## 4) test functons in applied datasets --IN PROCESS
 
-
-# library(zeallot)
-
 ## INTERNAL FUNCTIONS
 #  get_propensity
 #' This is an an internal function called \code{get_propensity()}
@@ -27,8 +24,8 @@ get_propensity <- function( tcde_data ,
                             tmM ,
                             tfamX ,
                             tfamM ) {
-  X<-glm(tmX,data=tcde_data,family=tfamX)$fitted.values
   M<-glm(tmM,data=tcde_data,family=tfamM)$fitted.values
+  X<-glm(tmX,data=tcde_data,family=tfamX)$fitted.values
   propensity <- list(X, M)
   return(propensity)
 }
@@ -143,7 +140,7 @@ get_output <- function(cde_ci, ci) {
     RD_l_error <- RD - cde_err[2]
     RD_r_error <- RD + cde_err[2]
 
-    cde_out <- cbind(RR, RR_l_error, RR_r_error, RD, RD_l_error, RD_r_error)
+    cde_out <- cbind(RD, RD_l_error, RD_r_error,RR, RR_l_error, RR_r_error)
     names(RR)<-"risk ratio"
     names(RD) <- "risk difference"
     names(RD_l_error)<-"RD lower ci"
@@ -186,7 +183,6 @@ get_output <- function(cde_ci, ci) {
 #'   RD-interaction. If boot is TRUE, it will also return the right and left
 #'   bounds of the desired confidence interval, ci.
 #'
-#' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
@@ -210,8 +206,13 @@ cde_ipw<-function(x=NULL,
                   sims=100,
                   ci=0.95){
 
-  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                     mX=mX, mM=mM, mY=mY)
+  vars_o <- get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y, mX=mX, mM=mM, mY=mY)
+
+  cde_data_o <- vars_o[[1]]
+  exposure_o <- vars_o[[2]]
+  mediator_o <- vars_o[[3]]
+  outcome_o  <- vars_o[[4]]
+
   cde_ci <- data.frame()
 
   if (!boot) {
@@ -238,25 +239,23 @@ cde_ipw<-function(x=NULL,
     }
 
     # potential for superlearner...
-    c(X_propensity, M_propensity) %<-% get_propensity( cde_data,
-                                                       mX,
-                                                       mM,
-                                                       famX,
-                                                       famM )
+    propensity <- get_propensity( cde_data,
+                                  mX,
+                                  mM,
+                                  famX,
+                                  famM )
+    X_propensity <- propensity[[1]]
+    M_propensity <- propensity[[2]]
 
-    den <- (X_propensity * exposure + (1 - X_propensity) * (1 - exposure)) *
-      (M_propensity * mediator + (1 - M_propensity) * (1 - mediator))
+    den<-(X_propensity*exposure + (1-X_propensity)*(1-exposure))*(M_propensity*mediator + (1-M_propensity)*(1-mediator))
 
-    num <- (mean(exposure) * exposure + (1 - mean(exposure)) * (1 - exposure)) *
-      (mean(mediator) * mediator + (1 - mean(mediator)) * (1 - mediator))
+    num<-(mean(exposure)*exposure + (1-mean(exposure))*(1-exposure))*(mean(mediator)*mediator + (1-mean(mediator))*(1-mediator))
 
     cde_data$sw = num / den
 
-    RR <- exp(coef(glm(mY, data=cde_data, family=poisson(link="log"),
-                       weights=sw))[as.character(mX[[2]])])
+    RD <- coef(glm(outcome~exposure+mediator+exposure:mediator,data=cde_data,family=gaussian(link="identity"),weights=sw))['exposure']
 
-    RD <- coef(glm(mY, data=cde_data, family=gaussian(link="identity"),
-                   weights=sw))[as.character(mX[[2]])]
+    RR <- exp(coef(glm(outcome~exposure+mediator+exposure:mediator,data=cde_data,family=poisson(link="log"),weights=sw))['exposure'])
 
     cde_ci <- rbind(cde_ci, c(RR, RD))
   }
@@ -293,7 +292,6 @@ cde_ipw<-function(x=NULL,
 #'   RD-interaction. If boot is TRUE, it will also return the right and left
 #'   bounds of the desired confidence interval, ci.
 #'
-#' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
@@ -317,8 +315,13 @@ cde_transf<-function(x=NULL,
                      sims=100,
                      ci=0.95){
 
-  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                                 mX=mX, mM=mM, mY=mY)
+  vars_o <- get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y, mX=mX, mM=mM, mY=mY)
+
+  cde_data_o <- vars_o[[1]]
+  exposure_o <- vars_o[[2]]
+  mediator_o <- vars_o[[3]]
+  outcome_o  <- vars_o[[4]]
+
 
   cde_ci <- data.frame()
 
@@ -390,7 +393,6 @@ cde_transf<-function(x=NULL,
 #'   RD-interaction. If boot is TRUE, it will also return the right and left
 #'   bounds of the desired confidence interval, ci.
 #'
-#' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
@@ -414,8 +416,12 @@ cde_gest<-function(x=NULL,
                    sims=100,
                    ci=0.95){
 
-  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                                 mX=mX, mM=mM, mY=mY)
+  vars_o <- get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y, mX=mX, mM=mM, mY=mY)
+
+  cde_data_o <- vars_o[[1]]
+  exposure_o <- vars_o[[2]]
+  mediator_o <- vars_o[[3]]
+  outcome_o  <- vars_o[[4]]
 
   cde_ci <- data.frame()
 
@@ -443,11 +449,13 @@ cde_gest<-function(x=NULL,
 
     }
 
-    c(X_propensity, M_propensity) %<-% get_propensity( cde_data,
-                                                       mX,
-                                                       mM,
-                                                       famX,
-                                                       famM )
+    propensity <- get_propensity( cde_data,
+                                  mX,
+                                  mM,
+                                  famX,
+                                  famM )
+    X_propensity <- propensity[[1]]
+    M_propensity <- propensity[[2]]
 
     mod1<-matrix(coef(lm(y~x+I(m-M_propensity)+x:I(m-M_propensity)+c_my,data=cde_data))[c("I(m - M_propensity)","x:I(m - M_propensity)")])
     y_tilde<-outcome - matrix(c(mediator,mediator*exposure),ncol=2)%*%mod1
@@ -490,7 +498,6 @@ cde_gest<-function(x=NULL,
 #'   RD-interaction. If boot is TRUE, it will also return the right and left
 #'   bounds of the desired confidence interval, ci.
 #'
-#' @import zeallot
 #' @export
 #' @references Naimi, A. I., Schnitzer, M. E., Moodie, E. E. M., & Bodnar, L. M.
 #'   (2016). Mediation Analysis for Health Disparities Research. American
@@ -514,8 +521,12 @@ cde_tmle<-function(x=NULL,
                    sims=100,
                    ci=0.95){
 
-  c(cde_data_o, exposure_o, mediator_o, outcome_o) %<-% get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y,
-                                                                 mX=mX, mM=mM, mY=mY)
+  vars_o <- get_vars(x=x, m=m, c_xy=c_xy, c_my=c_my, y=y, mX=mX, mM=mM, mY=mY)
+
+  cde_data_o <- vars_o[[1]]
+  exposure_o <- vars_o[[2]]
+  mediator_o <- vars_o[[3]]
+  outcome_o  <- vars_o[[4]]
 
   cde_ci <- data.frame()
 
